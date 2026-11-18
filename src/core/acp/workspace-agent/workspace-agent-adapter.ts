@@ -17,6 +17,7 @@ import { WorkspaceAgentStateMachine } from "./workspace-agent-state";
 import { createCodingTools, createAgentManagementTools } from "./workspace-agent-tools";
 import {
   resolveWorkspaceAgentConfig,
+  resolveUberLLMCredentials,
   createLanguageModel,
   type WorkspaceAgentConfig,
 } from "./workspace-agent-config";
@@ -88,9 +89,9 @@ export class WorkspaceAgentAdapter {
         throw new Error("Workspace agent (atlascloud) requires ATLASCLOUD_API_KEY");
       }
     } else if (this.config.provider === "uberllm") {
-      if (!this.config.apiKey && !process.env.UBERLLM_API_KEY) {
-        throw new Error("Workspace agent (uberllm) requires UBERLLM_API_KEY");
-      }
+      // Same check the first prompt runs, so a base URL the server key may not be
+      // sent to is rejected here instead of after the session is marked ready.
+      resolveUberLLMCredentials(this.config);
     } else if (this.config.provider === "minimax") {
       if (!this.config.apiKey && !process.env.MINIMAX_API_KEY) {
         throw new Error("Workspace agent (minimax) requires MINIMAX_API_KEY");

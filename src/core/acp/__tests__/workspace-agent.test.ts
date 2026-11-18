@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { WorkspaceAgentStateMachine } from "../workspace-agent/workspace-agent-state";
 import {
   isUberLLMBaseUrl,
+  isUberLLMOpenAIBaseUrl,
   normalizeAnthropicBaseUrl,
   resolveUberLLMCredentials,
   resolveWorkspaceAgentConfig,
@@ -187,6 +188,15 @@ describe("resolveWorkspaceAgentConfig", () => {
     expect(isUberLLMBaseUrl("http://api.uberllm.dev/v1")).toBe(false);
   });
 
+  it("treats only the /v1 path as UberLLM's OpenAI-compatible base", () => {
+    expect(isUberLLMOpenAIBaseUrl("https://api.uberllm.dev/v1")).toBe(true);
+    expect(isUberLLMOpenAIBaseUrl("https://api.uberllm.dev/v1/")).toBe(true);
+    expect(isUberLLMOpenAIBaseUrl("https://api.uberllm.dev")).toBe(false);
+    expect(isUberLLMOpenAIBaseUrl("https://api.uberllm.dev/")).toBe(false);
+    expect(isUberLLMOpenAIBaseUrl("https://api.uberllm.dev/v10")).toBe(false);
+    expect(isUberLLMOpenAIBaseUrl("https://attacker.example/v1")).toBe(false);
+  });
+
   it("never sends the server UberLLM key to a per-session base URL", () => {
     const originalApiKey = process.env.UBERLLM_API_KEY;
     const originalBase = process.env.UBERLLM_API_BASE;
@@ -296,6 +306,36 @@ describe("WorkspaceAgentAdapter credentials", () => {
     } finally {
       if (originalApiKey === undefined) delete process.env.UBERLLM_API_KEY;
       else process.env.UBERLLM_API_KEY = originalApiKey;
+    }
+  });
+
+  it("rejects an UberLLM session whose base URL may not receive the server key", async () => {
+    const originalApiKey = process.env.UBERLLM_API_KEY;
+    const originalBase = process.env.UBERLLM_API_BASE;
+
+    try {
+      process.env.UBERLLM_API_KEY = "server-key";
+      delete process.env.UBERLLM_API_BASE;
+      const untrusted = new WorkspaceAgentAdapter("/tmp", vi.fn(), {
+        config: { provider: "uberllm", baseUrl: "https://proxy.example/v1" },
+      });
+      await expect(untrusted.connect()).rejects.toThrow("needs an apiKey");
+      expect(untrusted.alive).toBe(false);
+
+      const ownKey = new WorkspaceAgentAdapter("/tmp", vi.fn(), {
+        config: { provider: "uberllm", baseUrl: "https://proxy.example/v1", apiKey: "session-key" },
+      });
+      await expect(ownKey.connect()).resolves.toBeUndefined();
+
+      const official = new WorkspaceAgentAdapter("/tmp", vi.fn(), {
+        config: { provider: "uberllm", baseUrl: "https://api.uberllm.dev/v1" },
+      });
+      await expect(official.connect()).resolves.toBeUndefined();
+    } finally {
+      if (originalApiKey === undefined) delete process.env.UBERLLM_API_KEY;
+      else process.env.UBERLLM_API_KEY = originalApiKey;
+      if (originalBase === undefined) delete process.env.UBERLLM_API_BASE;
+      else process.env.UBERLLM_API_BASE = originalBase;
     }
   });
 

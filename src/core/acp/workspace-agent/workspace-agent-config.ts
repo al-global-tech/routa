@@ -75,6 +75,15 @@ export function isUberLLMBaseUrl(baseUrl?: string): boolean {
 }
 
 /**
+ * True only for UberLLM's OpenAI-compatible base (path /v1). The bare host is the
+ * Anthropic-compatible base and must stay on the anthropic provider.
+ */
+export function isUberLLMOpenAIBaseUrl(baseUrl?: string): boolean {
+  if (!baseUrl || !isUberLLMBaseUrl(baseUrl)) return false;
+  return /^\/v1(\/|$)/.test(new URL(baseUrl.trim()).pathname);
+}
+
+/**
  * The server's UBERLLM_API_KEY is only sent to api.uberllm.dev or to the operator's
  * UBERLLM_API_BASE. A per-session base URL anywhere else must bring its own apiKey.
  */
